@@ -1,6 +1,8 @@
 (ns mfa.model
   (:require [clojure.set :as set]))
 
+(def phishing-resistant-factors #{:webauthn :passkey :faceid :touchid})
+
 (defn policy [id required opts]
   {:mfa.policy/id id
    :mfa.policy/required (set required)
@@ -10,14 +12,23 @@
    :mfa.policy/fallbacks (vec (:fallbacks opts))
    :mfa.policy/fallback-for (:fallback-for opts)})
 
-(defn- satisfies-required? [fallback-for ok-types required]
-  (or (contains? ok-types required)
-      (boolean (some ok-types (get fallback-for required)))))
+(defn- satisfies-required? [policy ok-types required]
+  (let [fallback-for (:mfa.policy/fallback-for policy)
+        ;; A fallback may only stand in for a phishing-resistant required
+        ;; factor if the fallback is itself phishing-resistant -- otherwise
+        ;; a policy that demands phishing-resistant? true is silently
+        ;; satisfiable by a phishable factor (e.g. TOTP) via fallback-for.
+        guard? (and (:mfa.policy/phishing-resistant? policy)
+                    (contains? phishing-resistant-factors required))]
+    (or (contains? ok-types required)
+        (boolean (some (fn [alt]
+                         (and (contains? ok-types alt)
+                              (or (not guard?) (contains? phishing-resistant-factors alt))))
+                       (get fallback-for required))))))
 
 (defn result [policy factors]
-  (let [ok-types (set (map :authn.factor/type (filter :authn.factor/ok? factors)))
-        fallback-for (:mfa.policy/fallback-for policy)]
+  (let [ok-types (set (map :authn.factor/type (filter :authn.factor/ok? factors)))]
     {:mfa.result/policy-id (:mfa.policy/id policy)
      :mfa.result/factors (vec factors)
-     :mfa.result/ok? (every? #(satisfies-required? fallback-for ok-types %)
+     :mfa.result/ok? (every? #(satisfies-required? policy ok-types %)
                              (:mfa.policy/required policy))}))
