@@ -21,3 +21,29 @@
         out (c/evaluate p [{:authn.factor/type :totp :authn.factor/ok? true}
                            {:authn.factor/type :webauthn :authn.factor/ok? true}])]
     (is (:mfa.result/ok? out))))
+
+(deftest phishing-resistant-policy-rejects-non-phishing-resistant-fallback
+  ;; A phishing-resistant? true policy must not be satisfiable by a phishable
+  ;; fallback factor (e.g. TOTP) substituting for the phishing-resistant slot
+  ;; via :mfa.policy/fallback-for.
+  (let [p (m/policy "m5" #{:webauthn} {:phishing-resistant? true
+                                       :fallback-for {:webauthn #{:totp}}})
+        out (c/evaluate p [{:authn.factor/type :totp :authn.factor/ok? true}])]
+    (is (false? (:mfa.result/ok? out)))))
+
+(deftest phishing-resistant-policy-accepts-phishing-resistant-fallback
+  ;; A fallback that is itself phishing-resistant may still substitute.
+  (let [p (m/policy "m6" #{:webauthn} {:phishing-resistant? true
+                                       :fallback-for {:webauthn #{:passkey}}})
+        out (c/evaluate p [{:authn.factor/type :passkey :authn.factor/ok? true}])]
+    (is (:mfa.result/ok? out))))
+
+(deftest phishing-resistant-policy-allows-fallback-on-non-guarded-slot
+  ;; The fallback guard only applies to a required slot that is itself in
+  ;; phishing-resistant-factors -- an ordinary required slot may still fall
+  ;; back freely even under a phishing-resistant? policy.
+  (let [p (m/policy "m7" #{:webauthn :totp} {:phishing-resistant? true
+                                             :fallback-for {:totp #{:recovery-code}}})
+        out (c/evaluate p [{:authn.factor/type :webauthn :authn.factor/ok? true}
+                           {:authn.factor/type :recovery-code :authn.factor/ok? true}])]
+    (is (:mfa.result/ok? out))))

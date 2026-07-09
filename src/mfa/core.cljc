@@ -2,7 +2,7 @@
   (:require [clojure.set :as set]
             [mfa.model :as m]))
 
-(def phishing-resistant-factors #{:webauthn :passkey :faceid :touchid})
+(def phishing-resistant-factors m/phishing-resistant-factors)
 
 (defn policy-problems [policy]
   (cond-> []
