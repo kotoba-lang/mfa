@@ -59,3 +59,40 @@
     (is (false? (:mfa.result/ok? out)))
     (is (= :missing-provider
            (:authn.factor/error (first (:mfa.result/factors out)))))))
+
+(deftest a-failed-risk-elevated-step-up-factor-must-deny-not-silently-pass
+  (let [policy (m/policy "mfa-o4" #{:password} {})
+        providers (orchestrator/provider-map
+                   :password (orchestrator/provider (fn [request _ _] (factor request true)))
+                   :webauthn (orchestrator/provider (fn [request _ _] (factor request false))))
+        out (orchestrator/orchestrate (risk-planner/risk-planner)
+                                      providers
+                                      policy
+                                      "did:web:example.com:alice"
+                                      {:risk :critical}
+                                      {}
+                                      {})]
+    (is (= [:password :webauthn]
+           (mapv :authn.factor-request/type (:mfa.plan/factor-requests (:mfa.result/plan out))))
+        "sanity: the risk planner did request a :webauthn step-up at :critical risk")
+    (is (false? (:mfa.result/ok? out))
+        "a critical-risk login must be denied when the risk-planned webauthn step-up
+         fails, even though the original static policy only required :password and
+         :password itself succeeded -- the plan's step-up requirement must be
+         enforced, not just attempted and then silently ignored")))
+
+(deftest a-succeeding-risk-elevated-step-up-factor-still-passes
+  (let [policy (m/policy "mfa-o5" #{:password} {})
+        providers (orchestrator/provider-map
+                   :password (orchestrator/provider (fn [request _ _] (factor request true)))
+                   :webauthn (orchestrator/provider (fn [request _ _] (factor request true))))
+        out (orchestrator/orchestrate (risk-planner/risk-planner)
+                                      providers
+                                      policy
+                                      "did:web:example.com:alice"
+                                      {:risk :critical}
+                                      {}
+                                      {})]
+    (is (:mfa.result/ok? out)
+        "no regression: a critical-risk login still passes when the risk-planned
+         step-up factor actually succeeds")))
