@@ -38,18 +38,35 @@
   {:authn.factor-request/type factor-type
    :authn.factor-request/subject subject})
 
+(defn- effective-policy
+  "A risk-aware planner (e.g. mfa.adapters.risk-planner) can request MORE
+  factors than the static `policy` itself requires -- e.g. a step-up
+  :webauthn factor at :critical/:high risk, or an extra :totp at :medium
+  risk (mfa.adapters.risk-planner/plan-factors). Those step-up factors are
+  actually attempted via try-factor below, but core/evaluate only checks
+  policy's own :mfa.policy/required set -- so a step-up factor the plan
+  explicitly requested, and that FAILED verification, was silently invisible
+  to enforcement as long as the original static-policy factors succeeded
+  (confirmed MFA step-up bypass this closes). Widen :required to the union
+  of the policy's own required set and the plan's actually-requested types,
+  so every factor the plan attempted must also actually succeed."
+  [policy primary-requests]
+  (update policy :mfa.policy/required
+          into (map :authn.factor-request/type primary-requests)))
+
 (defn orchestrate [planner providers policy subject context responses opts]
   (let [plan (planner/plan planner policy subject context opts)
         primary-requests (:mfa.plan/factor-requests plan)
         primary-factors (mapv #(try-factor providers % responses opts) primary-requests)
-        primary-result (core/evaluate policy primary-factors)]
+        eff-policy (effective-policy policy primary-requests)
+        primary-result (core/evaluate eff-policy primary-factors)]
     (if (:mfa.result/ok? primary-result)
       (assoc primary-result
              :mfa.result/plan plan
              :mfa.result/fallback-used? false)
       (let [fallback-requests (mapv #(fallback-request subject %) (:mfa.plan/fallbacks plan))
             fallback-factors (mapv #(try-factor providers % responses opts) fallback-requests)
-            result (core/evaluate policy (vec (concat primary-factors fallback-factors)))]
+            result (core/evaluate eff-policy (vec (concat primary-factors fallback-factors)))]
         (assoc result
                :mfa.result/plan plan
                :mfa.result/fallback-used? (boolean (seq fallback-factors)))))))
