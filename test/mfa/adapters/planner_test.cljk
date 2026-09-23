@@ -1,5 +1,5 @@
 (ns mfa.adapters.planner-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [mfa.adapters.planner :as a]
             [mfa.model :as m]))
 

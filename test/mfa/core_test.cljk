@@ -1,5 +1,5 @@
 (ns mfa.core-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [mfa.core :as c]
             [mfa.model :as m]))
 
