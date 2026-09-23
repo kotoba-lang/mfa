@@ -1,5 +1,5 @@
 (ns mfa.adapters.risk-planner-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [mfa.adapters.planner :as planner]
             [mfa.adapters.risk-planner :as risk-planner]
             [mfa.model :as m]))
