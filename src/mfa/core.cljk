@@ -1,5 +1,5 @@
 (ns mfa.core
-  (:require [clojure.set :as set]
+  (:require [kotoba.lang.coll :as set]
             [mfa.model :as m]))
 
 (def phishing-resistant-factors m/phishing-resistant-factors)
