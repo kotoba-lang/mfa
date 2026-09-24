@@ -1,5 +1,5 @@
 (ns mfa.model
-  (:require [clojure.set :as set]))
+  (:require [kotoba.lang.coll :as set]))
 
 (def phishing-resistant-factors #{:webauthn :passkey :faceid :touchid})
 
